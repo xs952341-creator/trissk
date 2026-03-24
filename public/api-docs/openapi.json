@@ -1,0 +1,206 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Playbook Hub — API Pública",
+    "description": "API REST para integração com a plataforma Playbook Hub. Permite listar produtos, consultar assinantes e gerenciar entregas programaticamente.\n\n## Autenticação\nTodas as rotas requerem um `Bearer Token` no header `Authorization`:\n```\nAuthorization: Bearer pk_live_...\n```\nGere sua API Key em: Dashboard → Configurações → API Keys\n\n## Rate Limiting\n- **1.000 requests/hora** por API Key (padrão)\n- Header `X-RateLimit-Remaining` indica o saldo restante\n- Status `429` quando o limite é excedido\n\n## Erros\nTodos os erros seguem o formato: `{ \"error\": \"Mensagem descritiva\" }`",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Suporte Playbook Hub",
+      "url": "https://playbook.hub/suporte"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://seu-dominio.com/api/v1",
+      "description": "Produção"
+    },
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Desenvolvimento local"
+    }
+  ],
+  "security": [
+    { "ApiKeyAuth": [] }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key (pk_live_...)",
+        "description": "API Key gerada no dashboard do vendor. Formato: pk_live_xxxxx ou pk_test_xxxxx"
+      }
+    },
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string", "example": "Minha Ferramenta SaaS" },
+          "slug": { "type": "string", "example": "minha-ferramenta-saas" },
+          "description": { "type": "string" },
+          "delivery_method": {
+            "type": "string",
+            "enum": ["WEBHOOK", "KEYS", "MAGIC_LINK", "MANUAL"],
+            "description": "WEBHOOK=provisionamento via HTTP; KEYS=chave de licença; MAGIC_LINK=link de acesso; MANUAL=manual"
+          },
+          "tiers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Tier" }
+          },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Tier": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "tier_name": { "type": "string", "example": "Pro" },
+          "price_monthly": { "type": "number", "example": 97.0 },
+          "price_annual": { "type": "number", "example": 79.0 },
+          "price_lifetime": { "type": "number", "example": 497.0 },
+          "is_popular": { "type": "boolean" }
+        }
+      },
+      "Subscriber": {
+        "type": "object",
+        "properties": {
+          "user_id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "tier_id": { "type": "string", "format": "uuid" },
+          "tier_name": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "canceled", "past_due", "trialing"]
+          },
+          "subscribed_at": { "type": "string", "format": "date-time" },
+          "canceled_at": { "type": "string", "format": "date-time", "nullable": true },
+          "stripe_subscription_id": { "type": "string", "example": "sub_xxxx" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer", "example": 1 },
+          "per_page": { "type": "integer", "example": 50 },
+          "total": { "type": "integer", "example": 143 },
+          "has_more": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/products": {
+      "get": {
+        "summary": "Listar produtos do vendor",
+        "description": "Retorna todos os produtos aprovados e ativos do vendor autenticado.",
+        "operationId": "listProducts",
+        "tags": ["Produtos"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50, "maximum": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de produtos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Product" }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/Pagination" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "API Key inválida ou ausente", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "429": { "description": "Rate limit excedido" }
+        }
+      }
+    },
+    "/subscribers": {
+      "get": {
+        "summary": "Listar assinantes",
+        "description": "Retorna os assinantes ativos de todos os produtos do vendor. Útil para sincronizar com ferramentas de CRM ou email marketing.\n\n**Escopo necessário:** `subscribers:read`",
+        "operationId": "listSubscribers",
+        "tags": ["Assinantes"],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "query",
+            "description": "Filtrar por produto específico (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filtrar por status da assinatura",
+            "schema": { "type": "string", "enum": ["active", "canceled", "past_due", "trialing"] }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Retornar apenas assinantes criados/modificados após esta data (ISO 8601)",
+            "schema": { "type": "string", "format": "date-time", "example": "2024-01-01T00:00:00Z" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50, "maximum": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de assinantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Subscriber" }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/Pagination" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Não autorizado" },
+          "403": { "description": "Escopo subscribers:read necessário" },
+          "429": { "description": "Rate limit excedido" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Produtos", "description": "Gerenciamento de produtos do vendor" },
+    { "name": "Assinantes", "description": "Consulta de assinantes e entitlements" }
+  ]
+}

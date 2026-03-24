@@ -98,7 +98,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
 SUPABASE_SERVICE_ROLE_KEY=sua-chave-service
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_SECRET_KEY=sk_test_...
-CRON_SECRET=string-aleatoria-segura
 ```
 
 ## 🏗 Estrutura do Projeto
@@ -204,12 +203,6 @@ npm run dev
 Configure os seguintes endpoints no seu provedor de pagamentos:
 - Stripe: `/api/webhooks/stripe`
 - Pagar.me: `/api/webhooks/pagarme`
-
-### Cron Jobs
-
-Configure os seguintes endpoints para tarefas agendadas:
-- `/api/cron/reconcile` - Reconciliação financeira
-- `/api/cron/emit-fiscal-jobs` - Emissão de NFs pendentes
 
 ## 🤝 Contribuição
 
